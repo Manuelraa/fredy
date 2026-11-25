@@ -37,9 +37,10 @@ let gotos;
  *
  * @param {(url: string, init?: any) => {status: number, body: string, stream?: any}} handler answers one
  *   request; `stream` becomes the response's `body` stream
+ * @param {{cookie?: string}} [options] the page's `document.cookie`
  * @returns {any} something shaped enough like a puppeteer browser
  */
-function fakeBrowser(handler) {
+function fakeBrowser(handler, { cookie = '' } = {}) {
   const page = {
     isClosed: () => false,
     goto: async (url) => {
@@ -49,6 +50,7 @@ function fakeBrowser(handler) {
     close: async () => {},
     evaluate: async (fn, ...args) => {
       const original = globalThis.fetch;
+      globalThis.document = { cookie };
       globalThis.fetch = async (url, init) => {
         requests.push(String(url));
         const { status, body, stream } = handler(String(url), init);
@@ -58,6 +60,7 @@ function fakeBrowser(handler) {
         return await fn(...args);
       } finally {
         globalThis.fetch = original;
+        delete globalThis.document;
       }
     },
   };
@@ -110,6 +113,42 @@ describe('#immowelt bff transport', () => {
       expect(url.length).toBeLessThan(700);
       expect(url.replace('/classifiedList/', '').split(',').length).toBeLessThanOrEqual(30);
     }
+  });
+
+  // DataDome answers a search without these two parameters with its captcha. They are what the
+  // site's own result page sends: its tracking session, and a fresh id for every search.
+  it('sends the session the home page set and a fresh search id with every search', async () => {
+    const browser = fakeBrowser(
+      (url) =>
+        url.startsWith('/serp-bff/search')
+          ? { status: 200, body: searchResponse(1) }
+          : { status: 200, body: listResponse(url) },
+      { cookie: 'datadome=abc; iwt_event_tracking_session_id=6b1e40cf-df5b-47d5-900f-eedbcd3e49a2; _dd_s=x' },
+    );
+
+    await searchClassifieds(browser, SEARCH_REQUEST, DE);
+    await searchClassifieds(browser, SEARCH_REQUEST, DE);
+
+    const searches = requests
+      .filter((url) => url.startsWith('/serp-bff/search'))
+      .map((url) => new URL(url, DE.origin).searchParams);
+    expect(searches).toHaveLength(2);
+    expect(searches.map((params) => params.get('sessionId'))).toEqual([
+      '6b1e40cf-df5b-47d5-900f-eedbcd3e49a2',
+      '6b1e40cf-df5b-47d5-900f-eedbcd3e49a2',
+    ]);
+    expect(searches[0].get('searchId')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(searches[0].get('searchId')).not.toBe(searches[1].get('searchId'));
+  });
+
+  it('makes up a session id when the home page set none', async () => {
+    const browser = fakeBrowser(() => ({ status: 200, body: searchResponse(0) }));
+
+    await searchClassifieds(browser, SEARCH_REQUEST, DE);
+
+    const params = new URL(requests[0], DE.origin).searchParams;
+    expect(params.get('sessionId')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(params.get('searchId')).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('asks for every id exactly once', async () => {
