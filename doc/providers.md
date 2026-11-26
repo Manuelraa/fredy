@@ -322,6 +322,12 @@ that works without a licence key. Neither needs an account or a key, and the bin
 itself on the first start (the Docker image ships it). Some portals behind DataDome (SeLoger) block
 CloakBrowser in a Linux container, so on arm64 those can fail where amd64 gets through.
 
+DataDome also refuses a headless browser where it lets the same one through headed: on arm64, immowelt
+answers every search with 403 while CloakBrowser runs headless. Set `FREDY_BROWSER_HEADLESS=false`
+to run the browser headed. It then needs an X server: on a server, start
+[Xvfb](https://www.x.org/releases/current/doc/man/man1/Xvfb.1.xhtml) (for example
+`Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp`) and point Fredy at it with `DISPLAY=:99`.
+
 On a **server / VPS the requests usually originate from a datacenter IP**, and providers behind
 anti-bot systems (e.g. AWS CloudFront/WAF) block those based on **IP reputation alone**, no matter
 how perfect the fingerprint is. The typical symptom: it works locally but you get

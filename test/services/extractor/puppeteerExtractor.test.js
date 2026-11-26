@@ -128,6 +128,42 @@ describe('launchBrowser fingerprint platform', () => {
   });
 });
 
+describe('launchBrowser headless mode', () => {
+  beforeEach(() => {
+    usesClearcoteMock.mockReturnValue(false);
+    launchMock.mockReset();
+    launchMock.mockResolvedValue({ close: async () => {} });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('runs headless by default', async () => {
+    vi.stubEnv('FREDY_BROWSER_HEADLESS', '');
+
+    await launchBrowser('https://www.immowelt.de/', {});
+
+    expect(launchMock.mock.calls[0][0].headless).toBe(true);
+  });
+
+  it('runs headed when FREDY_BROWSER_HEADLESS is false', async () => {
+    vi.stubEnv('FREDY_BROWSER_HEADLESS', 'false');
+
+    await launchBrowser('https://www.immowelt.de/', {});
+
+    expect(launchMock.mock.calls[0][0].headless).toBe(false);
+  });
+
+  it('lets a caller override FREDY_BROWSER_HEADLESS', async () => {
+    vi.stubEnv('FREDY_BROWSER_HEADLESS', 'false');
+
+    await launchBrowser('https://www.immowelt.de/', { puppeteerHeadless: true });
+
+    expect(launchMock.mock.calls[0][0].headless).toBe(true);
+  });
+});
+
 describe('launchBrowser on Clearcote', () => {
   const originalPlatform = process.platform;
 
